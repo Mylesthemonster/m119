@@ -17,6 +17,7 @@ void setup() {
   Serial.println("Started");
 
   pinMode(LED_BUILTIN, OUTPUT);
+  Serial.println(peripheral.address());
   
   //If Proximity Sensor doesnt start up have serial output failure
   if (!APDS.begin()) {
