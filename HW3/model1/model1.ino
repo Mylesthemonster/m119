@@ -10,7 +10,6 @@
 #include "/Users/mylesthemonster/Documents/m119/HW3/model.h"
 
 const int total_Sample = 50;  
-
 int sample_Num = 0;
 unsigned long lastUpdate = 0;
 
