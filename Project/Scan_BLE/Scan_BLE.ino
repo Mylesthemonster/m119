@@ -1,85 +1,68 @@
-#define RXD2 16
-#define TXD2 17
-
-#include "SoftwareSerial.h"
-SoftwareSerial softSerial(17, 16); //TX, RX: Connect Arduino pin 2 to scanner TX pin. Connect Arduino pin 3 to scanner RX pin.
-
-#include "SparkFun_DE2120_Arduino_Library.h" //Click here to get the library: http://librarymanager/All#SparkFun_DE2120
-DE2120 scanner;
-
-#define BUFFER_LEN 40
-char scanBuffer[BUFFER_LEN];
-char barcode[BUFFER_LEN];
-
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
+#include "SparkFun_DE2120_Arduino_Library.h"
 
-static BLEUUID SERVICE_UUID("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-static BLEUUID CHARACTERISTIC_UUID("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+// See the following for generating UUIDs:
+// https://www.uuidgenerator.net/
 
-BLEServer *pServer = BLEDevice::createServer();
-BLEService *pService = pServer->createService(SERVICE_UUID);
-BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-                                         CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_READ |
-                                         BLECharacteristic::PROPERTY_NOTIFY
-                                       );
+#define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
+#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define BUFFER_LEN 40
 
-static boolean connected = false;
+#define RXD2 16
+#define TXD2 17
+#include "SoftwareSerial.h"
+SoftwareSerial softSerial(TXD2, RXD2);
 
-class MyServerCallbacks: public BLEServerCallbacks {
-  void onConnect(BLEClient* pServer) {
-    connected = true;
-  }
+DE2120 scanner;
+char scanbuffer[BUFFER_LEN];
 
-  void onDisconnect(BLEClient* pServer) {
-    connected = false;
-    Serial.println("onDisconnect");
-  }
-};
+BLEServer *pServer;
+BLEService *pService;
+BLECharacteristic *pCharacteristic;
+
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Initiating BLE");
-  if (scanner.begin(softSerial) == false)
-  {
-    Serial.println("Scanner did not respond. Please check wiring. Did you scan the POR232 barcode? Freezing...");
-    while (1)
-      ;
-  }
+  Serial.println("Starting BLE work!");
 
-  BLEDevice::init("ESP32+Scanner");
-  pServer->setCallbacks(new MyServerCallbacks());
-  pCharacteristic->setValue(barcode);
+  BLEDevice::init("Long name works now");
+  pServer = BLEDevice::createServer();
+  pService = pServer->createService(SERVICE_UUID);
+  pCharacteristic = pService->createCharacteristic(
+                                         CHARACTERISTIC_UUID,
+                                         BLECharacteristic::PROPERTY_READ |
+                                         BLECharacteristic::PROPERTY_WRITE |
+                                         BLECharacteristic::PROPERTY_NOTIFY
+                                       );
+
+  pCharacteristic->setValue("000000000000");
   pService->start();
+  // BLEAdvertising *pAdvertising = pServer->getAdvertising();  // this still is working for backward compatibility
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
-  pAdvertising->setMinPreferred(0x06);
+  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
   pAdvertising->setMinPreferred(0x12);
   BLEDevice::startAdvertising();
+  Serial.println("Characteristic defined! Now you can read it in your phone!");
 
-  Serial.println("Scanner online!");
-  Serial.println("Scan Product");
+  if (!scanner.begin(softSerial)){
+    Serial.println("Scanner failed to initialize with softSerial.");
+    while(1);
+  }
+  for (int i = 0; i < BUFFER_LEN; i++) scanbuffer[i] = 0;
 }
 
 void loop() {
-  if (connected == true) {
-    Serial.println("We are now connected to the Food Databae");
-    if (scanner.readBarcode(scanBuffer, BUFFER_LEN)){
-      Serial.print("Code found: ");
-      String(barcode) = scanBuffer;
-      Serial.println(barcode);
-
-      pCharacteristic->setValue(barcode.c_str());
-      pCharacteristic->notify();
-
-      Serial.println("Sent barcode : " + barcode);
-    }
-  } else {
-      Serial.println("We have failed to connect to the Food Database; there is nothin more we will do.");
-    }
-
-  delay(1000);
+  if (scanner.readBarcode(scanbuffer, BUFFER_LEN) && scanbuffer[1]){
+    Serial.println("Barcode found");
+    
+    pCharacteristic->setValue(scanbuffer);
+    pCharacteristic->notify();
+  }
+  // put your main code here, to run repeatedly:
+  for (int i = 0; i < BUFFER_LEN; i++) scanbuffer[i] = 0;
+  delay(200);
 }
