@@ -1,8 +1,3 @@
-"""
-Connect by BLEDevice
-"""
-# I've tried using Bleak and BLE-GATT with no luck
-
 import asyncio
 import platform
 import sys
